@@ -1,4 +1,4 @@
-;NAME: FILE_APPEND
+;NAME: FILE_APPENDER
 ;
 ;PURPOSE: A script to append the filenames of a list of files. For example, for a list of files
 ;['file1.ext','file2.ext','file3.ext'], applying the append string 'app' will result in the creation of the
@@ -13,9 +13,11 @@
 ;OUTPUTS: New files with their filenames appended as described above. The original files are NOT deleted.
 ;
 ;WRITTEN: Andrew Inglis, 2012/12/04
+;         Andrew Inglis, 2012/12/07 - changed name to file_appender.pro to avoid conflict with IDL system routine
 
 
-PRO file_append,file_list,append_string
+
+PRO file_appender,file_list,append_string
 
 for i=0,n_elements(file_list)-1 do begin
 	substring=strsplit(file_list[i],'.',/extract)
