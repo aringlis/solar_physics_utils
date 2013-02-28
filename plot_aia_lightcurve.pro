@@ -50,7 +50,7 @@ fits2map,filelist,aiamap
 IF keyword_set(xrange) AND keyword_set(yrange) THEN BEGIN
    sub_map,aiamap,aiasubmap,xrange=xrange,yrange=yrange
    aiamap=aiasubmap
-
+ENDIF
 
 for i=0,n-1 do begin
     aia_flux[i] = total(aiamap[i].data/aiamap[i].dur)
