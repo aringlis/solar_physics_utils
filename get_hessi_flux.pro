@@ -32,9 +32,13 @@
 ;      .
 ;
 ; WRITTEN: Andrew Inglis, 2012/08/06
+;          Andrew Inglis, 2013/08/16 - fixed bug where energy bins for
+;                                      GBM data were always native
+;                                      (128 bins). Now set to 7 bins,
+;                                      matching RHESSI quicklook bins.
 ;                                                                                                                                             
 ;                                                
-pro get_hessi_flux, obj=obj,times=times,gbm=gbm,no_hsi=no_hsi                                                    
+pro get_hessi_flux, obj=obj,times=times,gbm=gbm,no_hsi=no_hsi,obs_summ=obs_summ                                                    
 ;
 search_network,/enable
      
@@ -44,7 +48,7 @@ default,times, [' 6-Jul-2012 00:00:00.000', ' 6-Jul-2012 08:00:00.000']
 ext=break_time(times[0])
 
 ;get RHESSI data unless this keyword is set
-IF NOT keyword_set(no_hsi) THEN BEGIN
+IF (NOT keyword_set(no_hsi)) OR (NOT keyword_set(obs_summ)) THEN BEGIN
                                                                               
 obj = hsi_spectrum()                                                                  
 obj-> set, obs_time_interval= [times[0], times[1]]
@@ -74,10 +78,18 @@ hessi_time=o->getaxis(/ut,/mean)
 hessi_energies=o->getaxis(/ct_energy,/edges_2)
 
 ;save the time series data to a file
-SAVE,hessi_flux,hessi_time,hessi_energies,filename='hessi_flux_'+ext+'.sav'
+SAVE,hessi_flux,hessi_time,hessi_energies,filename='/Users/ainglis/physics/event_list/event_list_data/hessi_flux_'+ext+'.sav'
 ;stop
 
 ENDIF
+
+IF keyword_set(obs_summ) THEN BEGIN
+   obj=hsi_obs_summary()
+   obj->set,obs_time_interval=[times[0],times[1]]
+   ;write a summary save file
+   obj->savwrite,savfile='/Users/ainglis/physics/event_list/event_list_data/obs_summ_'+ext+'.sav',/corrected
+ENDIF
+
 
 ;search for GBM data as well if this keyword is set
 IF keyword_set(gbm) THEN BEGIN
@@ -120,14 +132,17 @@ IF keyword_set(gbm) THEN BEGIN
    o-> set, spex_eband= [[4.50000, 15.0000], [15.0000, 25.0000], [25.0000, 50.0000], $    
                          [50.0000, 100.000], [100.000, 300.000], [300.000, 600.000], [600.000, 2000.00]]         
    o-> set, spex_tband= -1
-
+   
    ;extract the GBM time series data
-   gbm_flux=o->getdata(spex_units='flux')
+   d=o->getdata(spex_units='flux')
+   eband=o->get(/spex_eband)
+   gbm_flux=(o->get(/obj,class='spex_data'))->bin_data(data=d, intervals=eband)
    gbm_time=o->getaxis(/ut,/mean)
-   gbm_energies=o->getaxis(/ct_energy,/edges_2)
+   gbm_energies=eband;o->getaxis(/ct_energy,/edges_2)
    
    ;save the time series data to a file
-   SAVE,gbm_flux,gbm_time,gbm_energies,filename='gbm_flux_'+ext+'.sav'
+   SAVE,gbm_flux,gbm_time,gbm_energies,filename='/Users/ainglis/physics/event_list/event_list_data/gbm_flux_'+ext+'.sav'
+   print,'GBM save file written: gbm_flux_'+ext+'.sav'
 
 ENDIF
 ;stop
