@@ -12,7 +12,7 @@
 ;       XRAYS, TIME SERIES
 ;
 ; CALLING SEQUENCE:
-;       GET_HESSI_FLUX,times=times,no_hsi=no_hsi,gbm=gbm
+;       GET_HESSI_FLUX,times=times,no_hsi=no_hsi,gbm=gbm,obs_summ=obs_summ,eband=eband,dnum=dnum
 ;
 ; CALLS:
 ;       break_time.pro
@@ -21,14 +21,22 @@
 ; requires SSW with the HESSI and SPEX packages installed.
 ;
 ; KEYWORDS:
-;    times  - optional 2-element vector of times within which to
+;    times    - optional 2-element vector of times within which to
 ;               search for data. Should always be given, although
 ;               there is a default value.
-;    no_hsi - don't search for any RHESSI data. Use this if you
-;             already have the RHESSI data and just want to search for GBM
-;             data
-;    gbm    - search for FERMI/GBM data as well. Data from the 4 most
-;             sunward NAI detectors will be downloaded. BGO is not included.
+;    no_hsi   - don't search for any RHESSI data. Use this if you
+;               already have the RHESSI data and just want to search for GBM
+;               data
+;    gbm      - search for FERMI/GBM data as well. Data from the 4 most
+;               sunward NAI detectors will be downloaded. BGO is not
+;               included.
+;    obs_summ - if set, return RHESSI observing summary data in the
+;               SAV file.
+;    eband    - a 2xN array specifying the energy bands to use for GBM
+;               data, if desired.
+;    dnum     - an integer between 0 and 3, specifying which GBM detector
+;               to extract data from. 0 denotes the most sunward detector,
+;               1 the next-most sunward etc.
 ;      .
 ;
 ; WRITTEN: Andrew Inglis, 2012/08/06
@@ -36,13 +44,27 @@
 ;                                      GBM data were always native
 ;                                      (128 bins). Now set to 7 bins,
 ;                                      matching RHESSI quicklook bins.
+;                                    - added keyword EBAND for specifying
+;                                      custom energy bins, and DNUM
+;                                      for choosing which GBM detector
+;                                      to use
+;                                    - bug fix - GBM response (rsp) files
+;                                      now correctly downloaded
 ;                                                                                                                                             
 ;                                                
-pro get_hessi_flux, obj=obj,times=times,gbm=gbm,no_hsi=no_hsi,obs_summ=obs_summ                                                    
+pro get_hessi_flux, obj=obj,times=times,gbm=gbm,no_hsi=no_hsi,obs_summ=obs_summ,eband=eband,dnum=dnum                                                    
 ;
 search_network,/enable
      
-default,times, [' 6-Jul-2012 00:00:00.000', ' 6-Jul-2012 08:00:00.000']  
+default,times, [' 6-Jul-2012 00:00:00.000', ' 6-Jul-2012 08:00:00.000']
+default,eband, [[4.50000, 15.0000], [15.0000, 25.0000], [25.0000, 50.0000], $    
+                         [50.0000, 100.000], [100.000, 300.000], [300.000, 600.000], [600.000, 2000.00]] 
+default,dnum,0
+
+IF (dnum gt 3) OR (dnum lt 0) THEN BEGIN
+   print,'Error: dnum must be an integer between 0 and 3. Returning.'
+   return
+ENDIF
 
 ;get a file extension string with which to append filenames
 ext=break_time(times[0])
@@ -116,32 +138,33 @@ IF keyword_set(gbm) THEN BEGIN
    ;extract a string to use in the file name
    ext_gbm=strmid(ext,2,6)
    
-   ;find the gbm data from the detectors we chose at the observing times
-   gbm_find_data,date=times,det=dets,/copy,file=file
+   ;find the gbm data and response files from the detectors we chose at the observing times
+   gbm_find_data,date=times,det=dets,/copy,file=file,/rsp
 
-   spawn,'\ls glg_cspec_'+dets[0]+'_bn'+ext_gbm+'*.rsp*',srm_tab
+   ;get the detector response file for the desired detector (dnum chooses the detector)
+   spawn,'\ls glg_cspec_'+dets[dnum]+'_bn'+ext_gbm+'*.rsp*',srm_tab
 
    ;if ospex is not running then run ospex with the files we just downloaded
    if not is_class(o,'SPEX',/quiet) then o = ospex()      
 
-   ;use the most sunward detector to get the time series data                              
-   o-> set, spex_specfile= 'glg_cspec_'+dets[0]+'_'+ext_gbm+'_v00.pha'  
+   ;get the time series data from the chosen detector (dnum chooses the detector - 0 is the most sunward, 1 the next most etc.)                              
+   o-> set, spex_specfile= 'glg_cspec_'+dets[dnum]+'_'+ext_gbm+'_v00.pha'  
    o-> set, $                                                                             
       spex_drmfile= srm_tab[0]  
 ;o-> set, spex_source_angle= 90.0000                                                    
-   o-> set, spex_eband= [[4.50000, 15.0000], [15.0000, 25.0000], [25.0000, 50.0000], $    
-                         [50.0000, 100.000], [100.000, 300.000], [300.000, 600.000], [600.000, 2000.00]]         
+   o-> set, spex_eband= eband; [[4.50000, 15.0000], [15.0000, 25.0000], [25.0000, 50.0000], $    
+                         ; [50.0000, 100.000], [100.000, 300.000], [300.000, 600.000], [600.000, 2000.00]]         
    o-> set, spex_tband= -1
    
    ;extract the GBM time series data
    d=o->getdata(spex_units='flux')
-   eband=o->get(/spex_eband)
+   ;eband=o->get(/spex_eband)
    gbm_flux=(o->get(/obj,class='spex_data'))->bin_data(data=d, intervals=eband)
    gbm_time=o->getaxis(/ut,/mean)
    gbm_energies=eband;o->getaxis(/ct_energy,/edges_2)
    
    ;save the time series data to a file
-   SAVE,gbm_flux,gbm_time,gbm_energies,filename='/Users/ainglis/physics/event_list/event_list_data/gbm_flux_'+ext+'.sav'
+   SAVE,gbm_flux,gbm_time,gbm_energies,dnum,filename='/Users/ainglis/physics/event_list/event_list_data/gbm_flux_'+ext+'.sav'
    print,'GBM save file written: gbm_flux_'+ext+'.sav'
 
 ENDIF
