@@ -20,17 +20,13 @@
 ;
 PRO draw_shape,x,y,draw=draw
 
-counter=0
+cursor,x1,y1
+x=x1
+y=y1
 WHILE (!MOUSE.BUTTON NE 4) DO BEGIN
-   cursor,x1,y1
-   IF counter eq 0 THEN BEGIN
-      x=x1
-      y=y1
-   ENDIF ELSE BEGIN
-      x=[x,x1]
-      y=[y,y1]
-   ENDELSE
-   counter=counter+1
+   cursor,x1,y1,/down
+   x=[x,x1]
+   y=[y,y1]
 ENDWHILE
 
 IF keyword_set(draw) THEN BEGIN
